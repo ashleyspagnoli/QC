@@ -169,7 +169,7 @@ def plot_topologies(topologies: dict) -> plt.Figure:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 3.  Bar charts: Opt-0 vs Opt-3 side-by-side  ← FIXED
+# 3.  Bar charts: Opt-0 vs Opt-3 side-by-side
 # ─────────────────────────────────────────────────────────────────────────────
 def plot_opt3_bars(topologies: dict, results: dict) -> plt.Figure:
     """
