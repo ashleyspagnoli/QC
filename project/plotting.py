@@ -31,7 +31,7 @@ def _style_ax(ax, title="", ylabel=""):
 # ─────────────────────────────────────────────────────────────────────────────
 # 1.  Logical circuit schematic
 # ─────────────────────────────────────────────────────────────────────────────
-def plot_logical_circuit(n_qubits: int, logical_circuit) -> plt.Figure:
+def plot_logical_circuit(n_qubits: int, logical_circuit, show_measurements: bool = False) -> plt.Figure:
     drawable_ops = [
         instr for instr in logical_circuit.data
         if instr.operation.name not in ("barrier", "measure")
@@ -64,6 +64,9 @@ def plot_logical_circuit(n_qubits: int, logical_circuit) -> plt.Figure:
         "cz": "#E63946",
         "swap": "#F4A261",
     }
+    gate_labels = {
+        "cp": "U",
+    }
 
     x = 0.6
     for instr in drawable_ops:
@@ -79,7 +82,7 @@ def plot_logical_circuit(n_qubits: int, logical_circuit) -> plt.Figure:
                 edgecolor="white", lw=1.0,
             )
             ax.add_patch(box)
-            ax.text(x, ys[0], op.upper(), color="white", ha="center",
+            ax.text(x, ys[0], gate_labels.get(op, op.upper()), color="white", ha="center",
                     va="center", fontsize=8.5, fontweight="bold")
         elif op == "swap":
             ax.plot([x, x], [min(ys), max(ys)], color=TEXT_DIM, lw=1.2, zorder=3)
@@ -90,20 +93,21 @@ def plot_logical_circuit(n_qubits: int, logical_circuit) -> plt.Figure:
             ax.plot([x, x], [min(ys), max(ys)], color=TEXT_DIM, lw=1.2, zorder=3)
             ax.plot(x, ys[0], "o", color=color, ms=8, zorder=5)
             ax.plot(x, ys[-1], "o", color="white", ms=13, zorder=4, mfc="none", mew=1.4)
-            ax.text(x, ys[-1], op.upper(), color="white", ha="center",
+            ax.text(x, ys[-1], gate_labels.get(op, op.upper()), color="white", ha="center",
                     va="center", fontsize=6.5, fontweight="bold", zorder=6)
 
         x += x_step
 
-    for q in range(n_qubits):
-        y = n_qubits - 1 - q
-        mx = x + 0.25
-        mb = mpatches.FancyBboxPatch(
-            (mx - 0.22, y - 0.25), 0.44, 0.5,
-            boxstyle="round,pad=0.05", facecolor="#264653", edgecolor=TEXT_DIM, lw=1,
-        )
-        ax.add_patch(mb)
-        ax.text(mx, y, "M", color=TEXT_DIM, ha="center", va="center", fontsize=8)
+    if show_measurements:
+        for q in range(n_qubits):
+            y = n_qubits - 1 - q
+            mx = x + 0.25
+            mb = mpatches.FancyBboxPatch(
+                (mx - 0.22, y - 0.25), 0.44, 0.5,
+                boxstyle="round,pad=0.05", facecolor="#264653", edgecolor=TEXT_DIM, lw=1,
+            )
+            ax.add_patch(mb)
+            ax.text(mx, y, "M", color=TEXT_DIM, ha="center", va="center", fontsize=8)
 
     lops = logical_circuit.count_ops()
     ops_label = "  ".join(f"{k}: {v}" for k, v in lops.items() if k != "measure")
@@ -116,7 +120,7 @@ def plot_logical_circuit(n_qubits: int, logical_circuit) -> plt.Figure:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 2.  Topology diagrams (all three side-by-side)
+# 2.  Topology diagrams
 # ─────────────────────────────────────────────────────────────────────────────
 def plot_topologies(topologies: dict) -> plt.Figure:
     n = len(topologies)
@@ -128,7 +132,6 @@ def plot_topologies(topologies: dict) -> plt.Figure:
         color = topo["color"]
         short = topo["short"]
         desc  = topo["description"]
-        ibm   = topo["ibm_device"]
 
         ax.set_facecolor(BG_PANEL)
         for sp in ax.spines.values():
@@ -156,8 +159,7 @@ def plot_topologies(topologies: dict) -> plt.Figure:
 
         edge_count = len(list(cmap.get_edges())) // 2
         ax.text(0, -1.45,
-                f"{desc}\n\nEdges: {edge_count}  |  Qubits: {nq}\n"
-                f"Example device: {ibm}",
+                f"{desc}\n\nEdges: {edge_count}  |  Qubits: {nq}\n",
                 ha="center", va="top", color=TEXT_DIM,
                 fontsize=8.5, multialignment="center")
 
@@ -301,15 +303,111 @@ def plot_cx_by_opt(topologies: dict, results: dict) -> plt.Figure:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 6.  Summary heatmap — all optimisation levels
+# 6.  CX/U trade-off: fewer CX gates, more U gates
+# ─────────────────────────────────────────────────────────────────────────────
+def plot_cx_u_tradeoff(topologies: dict, results: dict, compare_opts=(0, 2)) -> plt.Figure:
+    """
+    Compare the CX/U gate mix between two optimisation levels.
+
+    The left panel shows the absolute CX+U composition. The right panel shows
+    the signed change, making it clear when CX gates decrease while U gates
+    increase.
+    """
+    topo_keys = list(topologies.keys())
+    labels = [topologies[t]["short"] for t in topo_keys]
+    x_pos = np.arange(len(topo_keys))
+    opt_a, opt_b = compare_opts
+
+    cx_a = np.array([results[t][opt_a]["cx"] for t in topo_keys])
+    u_a = np.array([results[t][opt_a]["u"] for t in topo_keys])
+    cx_b = np.array([results[t][opt_b]["cx"] for t in topo_keys])
+    u_b = np.array([results[t][opt_b]["u"] for t in topo_keys])
+
+    delta_cx = cx_b - cx_a
+    delta_u = u_b - u_a
+    delta_total = np.array([
+        results[t][opt_b]["total_gates"] - results[t][opt_a]["total_gates"]
+        for t in topo_keys
+    ])
+
+    fig, (ax_mix, ax_delta) = plt.subplots(
+        1, 2, figsize=(13, 4.8), facecolor=BG_DARK,
+        gridspec_kw={"width_ratios": [1.25, 1]},
+    )
+    fig.suptitle(
+        f"CX/U Gate Trade-off  (Opt-{opt_a} → Opt-{opt_b})",
+        color=TEXT_MAIN, fontsize=13, y=1.02,
+    )
+
+    for ax in (ax_mix, ax_delta):
+        _style_ax(ax)
+
+    # Left: absolute gate mix before/after optimisation.
+    bar_w = 0.34
+    x_a = x_pos - bar_w / 2
+    x_b = x_pos + bar_w / 2
+
+    ax_mix.bar(x_a, cx_a, bar_w, label=f"CX Opt-{opt_a}", color="#D1495B")
+    ax_mix.bar(x_a, u_a, bar_w, bottom=cx_a, label=f"U Opt-{opt_a}", color="#F4A261")
+    ax_mix.bar(x_b, cx_b, bar_w, label=f"CX Opt-{opt_b}", color="#2364AA")
+    ax_mix.bar(x_b, u_b, bar_w, bottom=cx_b, label=f"U Opt-{opt_b}", color="#73BFB8")
+
+    y_max = max(np.max(cx_a + u_a), np.max(cx_b + u_b), 1)
+    for xpos, cx, u in zip(x_a, cx_a, u_a):
+        ax_mix.text(xpos, cx + u + y_max * 0.025, f"{cx}+{u}",
+                    ha="center", color=TEXT_DIM, fontsize=9)
+    for xpos, cx, u in zip(x_b, cx_b, u_b):
+        ax_mix.text(xpos, cx + u + y_max * 0.025, f"{cx}+{u}",
+                    ha="center", color=TEXT_MAIN, fontsize=9, fontweight="bold")
+
+    ax_mix.set_title("Gate mix before/after optimisation", color=TEXT_MAIN, fontsize=11, pad=8)
+    ax_mix.set_ylabel("Gate count", color=TEXT_DIM, fontsize=9)
+    ax_mix.set_xticks(x_pos)
+    ax_mix.set_xticklabels(labels, color=TEXT_DIM)
+    ax_mix.set_ylim(0, y_max * 1.18)
+    ax_mix.legend(
+        ncol=2, fontsize=8, facecolor=BG_PANEL,
+        edgecolor=BORDER, labelcolor=TEXT_MAIN,
+    )
+
+    # Right: signed change between the two optimisation levels.
+    delta_w = 0.24
+    offsets = [-delta_w, 0, delta_w]
+    ax_delta.bar(x_pos + offsets[0], delta_cx, delta_w, label="ΔCX", color="#D1495B")
+    ax_delta.bar(x_pos + offsets[1], delta_u, delta_w, label="ΔU", color="#73BFB8")
+    ax_delta.bar(x_pos + offsets[2], delta_total, delta_w, label="ΔTotal", color="#6C757D")
+    ax_delta.axhline(0, color=TEXT_MAIN, lw=1)
+
+    for values, offset in ((delta_cx, offsets[0]), (delta_u, offsets[1]), (delta_total, offsets[2])):
+        for i, value in enumerate(values):
+            va = "bottom" if value >= 0 else "top"
+            pad = 2 if value >= 0 else -2
+            ax_delta.text(
+                x_pos[i] + offset, value + pad, f"{int(value):+d}",
+                ha="center", va=va, color=TEXT_MAIN, fontsize=9,
+            )
+
+    ax_delta.set_title(f"Change from Opt-{opt_a} to Opt-{opt_b}",
+                       color=TEXT_MAIN, fontsize=11, pad=8)
+    ax_delta.set_ylabel("Gate-count change", color=TEXT_DIM, fontsize=9)
+    ax_delta.set_xticks(x_pos)
+    ax_delta.set_xticklabels(labels, color=TEXT_DIM)
+    ax_delta.legend(
+        fontsize=8, facecolor=BG_PANEL,
+        edgecolor=BORDER, labelcolor=TEXT_MAIN,
+    )
+
+    fig.tight_layout()
+    return fig
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 7.  Summary heatmap — all optimisation levels
 # ─────────────────────────────────────────────────────────────────────────────
 def plot_heatmap(topologies: dict, results: dict) -> plt.Figure:
     """
     Rows  = topology × opt-level combinations (e.g. Linear/Opt-0, Linear/Opt-3 …)
     Cols  = metrics
-    Previously only Opt-3 was shown, making every row identical and the colour
-    encoding meaningless.  Now all opt levels are included so real variation
-    shows up in the colours.
     """
     topo_keys = list(topologies.keys())
     metrics   = ["depth", "cx", "u", "swap_est", "total_gates"]
@@ -354,7 +452,7 @@ def plot_heatmap(topologies: dict, results: dict) -> plt.Figure:
 
     # Horizontal dividers between topology groups
     for g in range(1, len(topo_keys)):
-        ax.axhline(g * len(show_opts) - 0.5, color=BORDER, lw=1.5)
+        ax.axhline(g * len(show_opts) - 0.5, color=BORDER, lw=5)
 
     for i in range(n_rows):
         for j in range(len(metrics)):

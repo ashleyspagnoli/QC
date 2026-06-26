@@ -31,12 +31,12 @@ def _format_ops(ops: OrderedDict) -> str:
 
 def _extract_metrics(tc: QuantumCircuit, baseline_cx: int) -> dict:
     ops: OrderedDict = tc.count_ops()
-    cx_count    = ops.get("cx",   0)
-    u_count     = ops.get("u",    0)
-    swap_count  = ops.get("swap", 0)
+    cx_count = ops.get("cx",   0)
+    u_count = ops.get("u",    0)
+    swap_count = ops.get("swap", 0)
     total_gates = sum(v for k, v in ops.items() if k not in ("measure", "barrier"))
-    extra_cx    = max(cx_count - baseline_cx, 0)
-    swap_est    = extra_cx // 3          # each SWAP decomposes into ~3 CX
+    extra_cx = max(cx_count - baseline_cx, 0)
+    swap_est = extra_cx // 3          # each SWAP decomposes into ~3 CX
     return {
         "depth":       tc.depth(),
         "cx":          cx_count,
@@ -52,10 +52,6 @@ def _extract_metrics(tc: QuantumCircuit, baseline_cx: int) -> dict:
 def run_transpilation(logical: QuantumCircuit, topologies: dict) -> dict:
     """
     Transpile `logical` onto every topology at every optimisation level.
-
-    Returns
-    -------
-    results[topo_name][opt_level] -> metrics dict
     """
     baseline_cx = _basis_cx_count(logical)
     results = {}

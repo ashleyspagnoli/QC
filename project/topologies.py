@@ -6,12 +6,6 @@ from qiskit.transpiler import CouplingMap
 def get_topologies(n_qubits: int) -> dict:
     """
     Return a dict of named CouplingMaps scaled to (at least) n_qubits.
-
-    Keys
-    ----
-    "Linear Chain"   : worst-case 1-D chain
-    "Heavy-Hex"      : IBM Falcon/Eagle production topology
-    "Full Graph"     : ideal all-to-all baseline
     """
     return {
         "Linear Chain": {
@@ -20,21 +14,20 @@ def get_topologies(n_qubits: int) -> dict:
             "short": "Linear",
             "description": (
                 "Qubits in a 1-D chain.\n"
-                "Only nearest-neighbour CNOTs are native.\n"
                 "Long-range gates need many SWAPs."
             ),
-            "ibm_device": "ibmq_5_yorktown (early)",
         },
         "Heavy-Hex": {
-            "map": CouplingMap.from_heavy_hex(3, bidirectional=True),  # ~7 qubits
+            # Here the parameter is the "distance" of the heavy-hex lattice, where the distance is the grid's 
+            # size parameter that determines the hardware's capacity to detect and correct quantum errors.
+            # The number of qubits is n_qubits = (5d^2 - 2d - 1) / 2, where d is the distance.
+            "map": CouplingMap.from_heavy_hex(3, bidirectional=True),
             "color": "#2A9D8F",
             "short": "Heavy-Hex",
             "description": (
-                "IBM's production topology (Falcon/Eagle/Heron).\n"
                 "Sparse hex lattice reduces crosstalk.\n"
                 "Moderate SWAP overhead for non-local gates."
             ),
-            "ibm_device": "ibm_cairo / ibm_nazca",
         },
         "Full Graph": {
             "map": CouplingMap.from_full(n_qubits),
@@ -44,6 +37,5 @@ def get_topologies(n_qubits: int) -> dict:
                 "Every qubit connected to every other.\n"
                 "Zero routing overhead — theoretical lower bound."
             ),
-            "ibm_device": "Ideal / simulator",
         },
     }
