@@ -31,7 +31,7 @@ def _style_ax(ax, title="", ylabel=""):
 # ─────────────────────────────────────────────────────────────────────────────
 # 1.  Logical circuit schematic
 # ─────────────────────────────────────────────────────────────────────────────
-def plot_logical_circuit(n_qubits: int, logical_circuit, show_measurements: bool = False) -> plt.Figure:
+def plot_logical_circuit(n_qubits: int, logical_circuit) -> plt.Figure:
     drawable_ops = [
         instr for instr in logical_circuit.data
         if instr.operation.name not in ("barrier", "measure")
@@ -64,10 +64,7 @@ def plot_logical_circuit(n_qubits: int, logical_circuit, show_measurements: bool
         "cz": "#E63946",
         "swap": "#F4A261",
     }
-    gate_labels = {
-        "cp": "U",
-    }
-
+    
     x = 0.6
     for instr in drawable_ops:
         op = instr.operation.name
@@ -82,7 +79,7 @@ def plot_logical_circuit(n_qubits: int, logical_circuit, show_measurements: bool
                 edgecolor="white", lw=1.0,
             )
             ax.add_patch(box)
-            ax.text(x, ys[0], gate_labels.get(op, op.upper()), color="white", ha="center",
+            ax.text(x, ys[0], op.upper(), color="white", ha="center",
                     va="center", fontsize=8.5, fontweight="bold")
         elif op == "swap":
             ax.plot([x, x], [min(ys), max(ys)], color=TEXT_DIM, lw=1.2, zorder=3)
@@ -93,21 +90,9 @@ def plot_logical_circuit(n_qubits: int, logical_circuit, show_measurements: bool
             ax.plot([x, x], [min(ys), max(ys)], color=TEXT_DIM, lw=1.2, zorder=3)
             ax.plot(x, ys[0], "o", color=color, ms=8, zorder=5)
             ax.plot(x, ys[-1], "o", color="white", ms=13, zorder=4, mfc="none", mew=1.4)
-            ax.text(x, ys[-1], gate_labels.get(op, op.upper()), color="white", ha="center",
+            ax.text(x, ys[-1], op.upper(), color="white", ha="center",
                     va="center", fontsize=6.5, fontweight="bold", zorder=6)
-
         x += x_step
-
-    if show_measurements:
-        for q in range(n_qubits):
-            y = n_qubits - 1 - q
-            mx = x + 0.25
-            mb = mpatches.FancyBboxPatch(
-                (mx - 0.22, y - 0.25), 0.44, 0.5,
-                boxstyle="round,pad=0.05", facecolor="#264653", edgecolor=TEXT_DIM, lw=1,
-            )
-            ax.add_patch(mb)
-            ax.text(mx, y, "M", color=TEXT_DIM, ha="center", va="center", fontsize=8)
 
     lops = logical_circuit.count_ops()
     ops_label = "  ".join(f"{k}: {v}" for k, v in lops.items() if k != "measure")
